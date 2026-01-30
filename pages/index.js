@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload } from 'lucide-react';
+import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload, Gift, ChevronDown, ChevronUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const supabase = createClient(
@@ -39,6 +39,11 @@ export default function App() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [periodFilter, setPeriodFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('total');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [expandedMonth, setExpandedMonth] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -98,6 +103,24 @@ export default function App() {
       if (dateFilter === 'year') return d.getFullYear() === now.getFullYear();
       return true;
     });
+  };
+
+  const getPeriodFilteredThanks = (withCommentOnly = false) => {
+    const now = new Date();
+    let filtered = thanks;
+    if (periodFilter === 'week') {
+      filtered = thanks.filter(t => new Date(t.date) >= new Date(now - 7*24*60*60*1000));
+    } else if (periodFilter === 'month') {
+      filtered = thanks.filter(t => { const d = new Date(t.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+    } else if (periodFilter === 'year') {
+      filtered = thanks.filter(t => new Date(t.date).getFullYear() === now.getFullYear());
+    } else if (periodFilter === 'custom' && startDate && endDate) {
+      filtered = thanks.filter(t => t.date >= startDate && t.date <= endDate);
+    }
+    if (withCommentOnly) {
+      filtered = filtered.filter(t => t.message && t.message.trim() !== '');
+    }
+    return filtered;
   };
 
   const getPointsByEmployee = () => {
@@ -164,6 +187,24 @@ export default function App() {
     return employees.map(e => ({ name: e.name.slice(0,4), fullName: e.name, points: points[e.id] })).sort((a,b) => b.points - a.points);
   };
 
+  const getMonthlyChartDataWithComment = () => {
+    const [year, month] = chartMonth.split('-').map(Number);
+    const monthThanks = thanks.filter(t => { 
+      const d = new Date(t.date); 
+      return d.getFullYear() === year && d.getMonth() + 1 === month && t.message && t.message.trim() !== '';
+    });
+    const points = {}; employees.forEach(e => points[e.id] = 0);
+    monthThanks.forEach(t => points[t.to]++);
+    return employees.map(e => ({ name: e.name.slice(0,4), fullName: e.name, points: points[e.id] })).sort((a,b) => b.points - a.points);
+  };
+
+  const getPeriodChartData = () => {
+    const filtered = getPeriodFilteredThanks(typeFilter === 'withComment');
+    const points = {}; employees.forEach(e => points[e.id] = 0);
+    filtered.forEach(t => points[t.to]++);
+    return employees.map(e => ({ name: e.name.slice(0,4), fullName: e.name, points: points[e.id] })).sort((a,b) => b.points - a.points);
+  };
+
   const changeMonth = (delta) => {
     const [year, month] = chartMonth.split('-').map(Number);
     const d = new Date(year, month - 1 + delta, 1);
@@ -171,6 +212,15 @@ export default function App() {
   };
 
   const formatMonth = (monthStr) => { const [year, month] = monthStr.split('-'); return `${year}年${parseInt(month)}月`; };
+
+  const getPeriodLabel = () => {
+    if (periodFilter === 'all') return '全期間';
+    if (periodFilter === 'week') return '今週';
+    if (periodFilter === 'month') return '今月';
+    if (periodFilter === 'year') return '今年';
+    if (periodFilter === 'custom') return `${startDate} 〜 ${endDate}`;
+    return '';
+  };
 
   const COLORS = ['#f472b6','#fb923c','#fbbf24','#a3e635','#34d399','#22d3ee','#818cf8','#c084fc','#f472b6','#fb923c','#fbbf24','#a3e635','#34d399','#22d3ee','#818cf8'];
 
@@ -219,6 +269,32 @@ export default function App() {
     };
     reader.readAsText(file);
     event.target.value = '';
+  };
+
+  const canViewReceivedThanks = (monthStr) => {
+    const [year, month] = monthStr.split('-').map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    const viewableTime = new Date(year, month - 1, lastDay, 18, 0, 0);
+    return new Date() >= viewableTime;
+  };
+
+  const getReceivedThanksByMonth = () => {
+    const receivedThanks = thanks.filter(t => t.to === currentUser.id);
+    const byMonth = {};
+    receivedThanks.forEach(t => {
+      const monthKey = t.date.substring(0, 7);
+      if (!byMonth[monthKey]) byMonth[monthKey] = {};
+      const fromName = getName(t.from);
+      if (!byMonth[monthKey][fromName]) byMonth[monthKey][fromName] = [];
+      byMonth[monthKey][fromName].push({ date: t.date, message: t.message });
+    });
+    return Object.entries(byMonth)
+      .filter(([month]) => canViewReceivedThanks(month))
+      .sort((a, b) => b[0].localeCompare(a[0]));
+  };
+
+  const getTotalCountForMonth = (monthData) => {
+    return Object.values(monthData).reduce((sum, arr) => sum + arr.length, 0);
   };
 
   if (loading) return <div className="min-h-screen bg-gradient-to-br from-pink-100 to-orange-100 flex items-center justify-center"><p className="text-gray-600">読み込み中...</p></div>;
@@ -294,6 +370,7 @@ export default function App() {
   }
 
   if (view === 'employee') {
+    const receivedByMonth = getReceivedThanksByMonth();
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-100 to-orange-100 p-4">
         <div className="max-w-lg mx-auto">
@@ -318,6 +395,52 @@ export default function App() {
               <button onClick={sendThanks} disabled={!selectedEmployee} className="w-full p-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-lg disabled:opacity-50"><Heart className="w-5 h-5 inline mr-2" />サンキューを送る</button>
             </div>
           </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-4">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Gift className="w-5 h-5 text-pink-500" />
+              受け取ったサンキュー
+            </h3>
+            {receivedByMonth.length === 0 ? (
+              <p className="text-gray-400 text-center py-4">まだ受け取ったサンキューはありません</p>
+            ) : (
+              <div className="space-y-3">
+                {receivedByMonth.map(([month, thanksByPerson]) => (
+                  <div key={month} className="border rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setExpandedMonth(expandedMonth === month ? null : month)}
+                      className="w-full p-3 bg-pink-50 flex justify-between items-center hover:bg-pink-100"
+                    >
+                      <span className="font-medium text-pink-700">{formatMonth(month)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-pink-600 font-bold">{getTotalCountForMonth(thanksByPerson)}件</span>
+                        {expandedMonth === month ? <ChevronUp className="w-5 h-5 text-pink-500" /> : <ChevronDown className="w-5 h-5 text-pink-500" />}
+                      </div>
+                    </button>
+                    {expandedMonth === month && (
+                      <div className="p-3 space-y-3 bg-white">
+                        {Object.entries(thanksByPerson).map(([person, thanksList]) => (
+                          <div key={person} className="border-l-4 border-pink-400 pl-3">
+                            <p className="font-medium text-pink-700 mb-2">{person}さんから（{thanksList.length}件）</p>
+                            <div className="space-y-2">
+                              {thanksList.map((t, idx) => (
+                                <div key={idx} className="p-2 bg-gray-50 rounded text-sm">
+                                  <span className="text-gray-400 text-xs">{t.date}</span>
+                                  <p className="text-gray-600">{t.message || '－'}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mt-4 text-center">※ 毎月末日18時以降に当月分が表示されます</p>
+          </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-6">
             <h3 className="font-bold text-gray-800 mb-4">あなたが送ったサンキュー</h3>
             <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -358,15 +481,15 @@ export default function App() {
 
         {adminTab === 'dashboard' && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-white rounded-xl p-4 shadow"><p className="text-gray-500 text-sm">総社員数</p><p className="text-3xl font-bold text-gray-800">{employees.length}</p></div>
               <div className="bg-white rounded-xl p-4 shadow"><p className="text-gray-500 text-sm">総サンキュー数</p><p className="text-3xl font-bold text-pink-600">{thanks.length}</p></div>
-              <div className="bg-white rounded-xl p-4 shadow"><p className="text-gray-500 text-sm">期間内サンキュー</p><p className="text-3xl font-bold text-orange-600">{filtered.length}</p></div>
-              <div className="bg-white rounded-xl p-4 shadow"><p className="text-gray-500 text-sm">フィルター</p><select className="mt-1 w-full p-2 border rounded" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}><option value="all">全期間</option><option value="week">今週</option><option value="month">今月</option><option value="year">今年</option></select></div>
+              <div className="bg-white rounded-xl p-4 shadow"><p className="text-gray-500 text-sm">コメント付きサンキュー数</p><p className="text-3xl font-bold text-orange-600">{thanks.filter(t => t.message && t.message.trim() !== '').length}</p></div>
             </div>
+
             <div className="bg-white rounded-xl shadow p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-pink-500" />月別ポイント獲得グラフ</h3>
+                <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-pink-500" />月別ポイント獲得グラフ（総合）</h3>
                 <div className="flex items-center gap-2"><button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft className="w-5 h-5" /></button><span className="font-medium min-w-32 text-center">{formatMonth(chartMonth)}</span><button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button></div>
               </div>
               <div className="h-96">
@@ -381,6 +504,69 @@ export default function App() {
                 </ResponsiveContainer>
               </div>
             </div>
+
+            <div className="bg-white rounded-xl shadow p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-orange-500" />月別ポイント獲得グラフ（コメント付のみ）</h3>
+                <div className="flex items-center gap-2"><button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft className="w-5 h-5" /></button><span className="font-medium min-w-32 text-center">{formatMonth(chartMonth)}</span><button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button></div>
+              </div>
+              <div className="h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={getMonthlyChartDataWithComment()} margin={{ top: 20, right: 30, left: 0, bottom: 60 }} barCategoryGap="15%">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={(value) => [value + ' ポイント', '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
+                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5 text-green-500" />期間指定ポイント獲得グラフ</h3>
+              </div>
+              <div className="flex flex-wrap gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">期間:</label>
+                  <select className="p-2 border rounded text-sm" value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}>
+                    <option value="all">全期間</option>
+                    <option value="week">今週</option>
+                    <option value="month">今月</option>
+                    <option value="year">今年</option>
+                    <option value="custom">期間指定</option>
+                  </select>
+                </div>
+                {periodFilter === 'custom' && (
+                  <div className="flex items-center gap-2">
+                    <input type="date" className="p-2 border rounded text-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <span className="text-gray-400">〜</span>
+                    <input type="date" className="p-2 border rounded text-sm" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">種別:</label>
+                  <select className="p-2 border rounded text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                    <option value="total">総合ポイント</option>
+                    <option value="withComment">コメント付きポイント</option>
+                  </select>
+                </div>
+              </div>
+              <div className="text-sm text-gray-500 mb-2">表示期間: {getPeriodLabel()} / 種別: {typeFilter === 'total' ? '総合ポイント' : 'コメント付きポイント'}</div>
+              <div className="h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={getPeriodChartData()} margin={{ top: 20, right: 30, left: 0, bottom: 60 }} barCategoryGap="15%">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={(value) => [value + ' ポイント', '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
+                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getPeriodChartData().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
             <div className="bg-white rounded-xl shadow p-6 mb-6">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-pink-500" />ポイント獲得ランキング</h3>
               <div className="space-y-3">
