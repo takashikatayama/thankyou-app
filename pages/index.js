@@ -34,6 +34,8 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginMode, setLoginMode] = useState('employee');
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [rememberPassword, setRememberPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -47,6 +49,19 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+    // ローカルストレージから保存された値を読み込む
+    const savedEmail = localStorage.getItem('thankyou_email');
+    const savedPassword = localStorage.getItem('thankyou_password');
+    const savedRememberEmail = localStorage.getItem('thankyou_remember_email') === 'true';
+    const savedRememberPassword = localStorage.getItem('thankyou_remember_password') === 'true';
+    if (savedRememberEmail && savedEmail) {
+      setLoginEmail(savedEmail);
+      setRememberEmail(true);
+    }
+    if (savedRememberPassword && savedPassword) {
+      setLoginPassword(savedPassword);
+      setRememberPassword(true);
+    }
   }, []);
 
   const fetchData = async () => {
@@ -71,10 +86,26 @@ export default function App() {
     if (loginMode === 'admin' && !ADMIN_EMAILS.includes(emp.email)) {
       setLoginError('このアカウントには管理者権限がありません'); return;
     }
+    // ログイン情報を保存
+    if (rememberEmail) {
+      localStorage.setItem('thankyou_email', loginEmail);
+      localStorage.setItem('thankyou_remember_email', 'true');
+    } else {
+      localStorage.removeItem('thankyou_email');
+      localStorage.setItem('thankyou_remember_email', 'false');
+    }
+    if (rememberPassword) {
+      localStorage.setItem('thankyou_password', loginPassword);
+      localStorage.setItem('thankyou_remember_password', 'true');
+    } else {
+      localStorage.removeItem('thankyou_password');
+      localStorage.setItem('thankyou_remember_password', 'false');
+    }
     setCurrentUser(emp);
     setIsAdmin(loginMode === 'admin');
     setView(emp.isFirstLogin ? 'changePassword' : (loginMode === 'admin' ? 'admin' : 'employee'));
-    setLoginEmail(''); setLoginPassword('');
+    if (!rememberEmail) setLoginEmail('');
+    if (!rememberPassword) setLoginPassword('');
   };
 
   const handleChangePassword = async () => {
@@ -362,6 +393,18 @@ export default function App() {
               </div>
             </div>
             {loginError && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{loginError}</div>}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={rememberEmail} onChange={(e) => { setRememberEmail(e.target.checked); if (!e.target.checked) setRememberPassword(false); }} className="w-4 h-4 text-pink-500 rounded" />
+                <span className="text-sm text-gray-600">メールアドレスを記憶する</span>
+              </label>
+              {rememberEmail && (
+                <label className="flex items-center gap-2 cursor-pointer ml-6">
+                  <input type="checkbox" checked={rememberPassword} onChange={(e) => setRememberPassword(e.target.checked)} className="w-4 h-4 text-pink-500 rounded" />
+                  <span className="text-sm text-gray-600">パスワードも記憶する</span>
+                </label>
+              )}
+            </div>
             <button onClick={handleLogin} className={`w-full p-3 text-white rounded-lg ${loginMode === 'admin' ? 'bg-gray-800' : 'bg-gradient-to-r from-pink-500 to-orange-500'}`}>{loginMode === 'admin' ? <BarChart3 className="w-5 h-5 inline mr-2" /> : <Heart className="w-5 h-5 inline mr-2" />}ログイン</button>
           </div>
         </div>
