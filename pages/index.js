@@ -14,6 +14,25 @@ const ADMIN_EMAILS = [
   'yuichi88@gmail.com'
 ];
 
+// 日本の祝日リスト（2024年〜2026年）※年1回更新推奨
+const HOLIDAYS = [
+  // 2024年
+  '2024-01-01', '2024-01-08', '2024-02-11', '2024-02-12', '2024-02-23',
+  '2024-03-20', '2024-04-29', '2024-05-03', '2024-05-04', '2024-05-05', '2024-05-06',
+  '2024-07-15', '2024-08-11', '2024-08-12', '2024-09-16', '2024-09-22', '2024-09-23',
+  '2024-10-14', '2024-11-03', '2024-11-04', '2024-11-23',
+  // 2025年
+  '2025-01-01', '2025-01-13', '2025-02-11', '2025-02-23', '2025-02-24',
+  '2025-03-20', '2025-04-29', '2025-05-03', '2025-05-04', '2025-05-05', '2025-05-06',
+  '2025-07-21', '2025-08-11', '2025-09-15', '2025-09-23',
+  '2025-10-13', '2025-11-03', '2025-11-23', '2025-11-24',
+  // 2026年
+  '2026-01-01', '2026-01-12', '2026-02-11', '2026-02-23',
+  '2026-03-20', '2026-04-29', '2026-05-03', '2026-05-04', '2026-05-05', '2026-05-06',
+  '2026-07-20', '2026-08-11', '2026-09-21', '2026-09-23',
+  '2026-10-12', '2026-11-03', '2026-11-23',
+];
+
 export default function App() {
   const [employees, setEmployees] = useState([]);
   const [thanks, setThanks] = useState([]);
@@ -302,10 +321,30 @@ export default function App() {
     event.target.value = '';
   };
 
+  const isHoliday = (date) => {
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return HOLIDAYS.includes(dateStr);
+  };
+
+  const isWeekend = (date) => {
+    const day = date.getDay();
+    return day === 0 || day === 6; // 日曜=0, 土曜=6
+  };
+
+  const getLastBusinessDay = (year, month) => {
+    // 月末日を取得
+    let date = new Date(year, month, 0); // month は1-12なので、0を渡すと前月の末日
+    // 土日祝日なら前の営業日に戻る
+    while (isWeekend(date) || isHoliday(date)) {
+      date.setDate(date.getDate() - 1);
+    }
+    return date;
+  };
+
   const canViewReceivedThanks = (monthStr) => {
     const [year, month] = monthStr.split('-').map(Number);
-    const lastDay = new Date(year, month, 0).getDate();
-    const viewableTime = new Date(year, month - 1, lastDay, 18, 0, 0);
+    const lastBusinessDay = getLastBusinessDay(year, month);
+    const viewableTime = new Date(lastBusinessDay.getFullYear(), lastBusinessDay.getMonth(), lastBusinessDay.getDate(), 18, 0, 0);
     return new Date() >= viewableTime;
   };
 
