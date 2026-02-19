@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload, Gift, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload, Gift, ChevronDown, ChevronUp, Pencil, Check, X, RotateCcw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const supabase = createClient(
@@ -65,6 +65,12 @@ export default function App() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedMonth, setExpandedMonth] = useState(null);
+  const [editingThankId, setEditingThankId] = useState(null);
+  const [editingMessage, setEditingMessage] = useState('');
+  const [expandedSentMonth, setExpandedSentMonth] = useState(null);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -144,6 +150,34 @@ export default function App() {
     setLoginEmail(''); setLoginPassword('');
   };
 
+  const handleResetPassword = async () => {
+    setResetError('');
+    setResetSuccess('');
+    if (!resetEmail.trim()) {
+      setResetError('メールアドレスを入力してください');
+      return;
+    }
+    const emp = employees.find(e => e.email === resetEmail.trim());
+    if (!emp) {
+      setResetError('このメールアドレスは登録されていません');
+      return;
+    }
+    const defaultPassword = 'pass123';
+    const { error } = await supabase
+      .from('employees')
+      .update({ password: defaultPassword, is_first_login: true })
+      .eq('id', emp.id);
+    if (error) {
+      setResetError('パスワードのリセットに失敗しました');
+      return;
+    }
+    setEmployees(employees.map(e =>
+      e.id === emp.id ? { ...e, password: defaultPassword, isFirstLogin: true } : e
+    ));
+    setResetSuccess('パスワードを初期値（pass123）にリセットしました。\nこのパスワードでログインし、新しいパスワードに変更してください。');
+    setResetEmail('');
+  };
+
   const getFilteredThanks = () => {
     const now = new Date();
     return thanks.filter(t => {
@@ -199,6 +233,32 @@ export default function App() {
     }
     setSelectedEmployee(null); setThankMessage('');
     alert('サンキューを送信しました！');
+  };
+
+  const updateThankMessage = async (thankId) => {
+    const { error } = await supabase
+      .from('thanks')
+      .update({ message: editingMessage.trim() })
+      .eq('id', thankId);
+    if (error) {
+      alert('メッセージの更新に失敗しました');
+      return;
+    }
+    setThanks(thanks.map(t =>
+      t.id === thankId ? { ...t, message: editingMessage.trim() } : t
+    ));
+    setEditingThankId(null);
+    setEditingMessage('');
+  };
+
+  const startEditing = (thank) => {
+    setEditingThankId(thank.id);
+    setEditingMessage(thank.message || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingThankId(null);
+    setEditingMessage('');
   };
 
   const addEmployee = async () => {
@@ -367,6 +427,18 @@ export default function App() {
     return Object.values(monthData).reduce((sum, arr) => sum + arr.length, 0);
   };
 
+  const getSentThanksByMonth = () => {
+    const sentThanks = thanks.filter(t => t.from === currentUser.id);
+    const byMonth = {};
+    sentThanks.forEach(t => {
+      const monthKey = t.date.substring(0, 7);
+      if (!byMonth[monthKey]) byMonth[monthKey] = [];
+      byMonth[monthKey].push(t);
+    });
+    return Object.entries(byMonth)
+      .sort((a, b) => b[0].localeCompare(a[0]));
+  };
+
   if (loading) return <div className="min-h-screen bg-gradient-to-br from-pink-100 to-orange-100 flex items-center justify-center"><p className="text-gray-600">読み込み中...</p></div>;
 
   if (view === 'changePassword') {
@@ -396,6 +468,37 @@ export default function App() {
             </div>
             {passwordError && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{passwordError}</div>}
             <button onClick={handleChangePassword} className="w-full p-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-lg"><Lock className="w-5 h-5 inline mr-2" />パスワードを変更</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'resetPassword') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-orange-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-r from-pink-500 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4"><RotateCcw className="w-8 h-8 text-white" /></div>
+            <h1 className="text-2xl font-bold text-gray-800">パスワードリセット</h1>
+            <p className="text-gray-500 mt-2">登録済みのメールアドレスを入力してください</p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">メールアドレス</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input type="email" className="w-full pl-10 pr-4 py-3 border rounded-lg" placeholder="example@example.com" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleResetPassword()} />
+              </div>
+            </div>
+            {resetError && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{resetError}</div>}
+            {resetSuccess && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm whitespace-pre-line">{resetSuccess}</div>}
+            <button onClick={handleResetPassword} className="w-full p-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-lg flex items-center justify-center gap-2">
+              <RotateCcw className="w-5 h-5" />パスワードをリセット
+            </button>
+            <button onClick={() => { setView('login'); setResetEmail(''); setResetError(''); setResetSuccess(''); }} className="w-full p-3 text-gray-500 hover:text-gray-700 rounded-lg text-sm">
+              ← ログイン画面に戻る
+            </button>
           </div>
         </div>
       </div>
@@ -445,6 +548,11 @@ export default function App() {
               )}
             </div>
             <button onClick={handleLogin} className={`w-full p-3 text-white rounded-lg ${loginMode === 'admin' ? 'bg-gray-800' : 'bg-gradient-to-r from-pink-500 to-orange-500'}`}>{loginMode === 'admin' ? <BarChart3 className="w-5 h-5 inline mr-2" /> : <Heart className="w-5 h-5 inline mr-2" />}ログイン</button>
+            <div className="text-center">
+              <button onClick={() => { setView('resetPassword'); setResetError(''); setResetSuccess(''); setResetEmail(''); }} className="text-sm text-gray-400 hover:text-pink-500 underline">
+                パスワードをお忘れですか？
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -524,16 +632,70 @@ export default function App() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-6">
-            <h3 className="font-bold text-gray-800 mb-4">あなたが送ったサンキュー</h3>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {thanks.filter(t => t.from === currentUser.id).length === 0 ? <p className="text-gray-400 text-center py-4">まだサンキューを送っていません</p> :
-                thanks.filter(t => t.from === currentUser.id).map(t => (
-                  <div key={t.id} className="p-3 bg-pink-50 rounded-lg">
-                    <div className="flex justify-between items-start"><p className="font-medium text-pink-700">{getName(t.to)}さんへ</p><span className="text-xs text-gray-400">{t.date}</span></div>
-                    <p className="text-sm text-gray-600 mt-1">{t.message || '－'}</p>
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Heart className="w-5 h-5 text-orange-500" />
+              あなたが送ったサンキュー
+            </h3>
+            {getSentThanksByMonth().length === 0 ? (
+              <p className="text-gray-400 text-center py-4">まだサンキューを送っていません</p>
+            ) : (
+              <div className="space-y-3">
+                {getSentThanksByMonth().map(([month, monthThanks]) => (
+                  <div key={month} className="border rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSentMonth(expandedSentMonth === month ? null : month)}
+                      className="w-full p-3 bg-orange-50 flex justify-between items-center hover:bg-orange-100"
+                    >
+                      <span className="font-medium text-orange-700">{formatMonth(month)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-orange-600 font-bold">{monthThanks.length}件</span>
+                        {expandedSentMonth === month ? <ChevronUp className="w-5 h-5 text-orange-500" /> : <ChevronDown className="w-5 h-5 text-orange-500" />}
+                      </div>
+                    </button>
+                    {expandedSentMonth === month && (
+                      <div className="p-3 space-y-2 bg-white">
+                        {monthThanks.map(t => (
+                          <div key={t.id} className="p-3 bg-pink-50 rounded-lg">
+                            <div className="flex justify-between items-start">
+                              <p className="font-medium text-pink-700">{getName(t.to)}さんへ</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400">{t.date}</span>
+                                {editingThankId !== t.id && (
+                                  <button onClick={() => startEditing(t)} className="p-1 text-gray-400 hover:text-pink-500 rounded" title="メッセージを編集">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {editingThankId === t.id ? (
+                              <div className="mt-2 space-y-2">
+                                <textarea
+                                  className="w-full p-2 border rounded-lg text-sm"
+                                  rows={2}
+                                  placeholder="メッセージを入力..."
+                                  value={editingMessage}
+                                  onChange={(e) => setEditingMessage(e.target.value)}
+                                />
+                                <div className="flex gap-2 justify-end">
+                                  <button onClick={cancelEditing} className="px-3 py-1 text-sm text-gray-500 hover:bg-gray-100 rounded-lg flex items-center gap-1">
+                                    <X className="w-3.5 h-3.5" />キャンセル
+                                  </button>
+                                  <button onClick={() => updateThankMessage(t.id)} className="px-3 py-1 text-sm bg-pink-500 text-white hover:bg-pink-600 rounded-lg flex items-center gap-1">
+                                    <Check className="w-3.5 h-3.5" />保存
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-600 mt-1">{t.message || '－'}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
