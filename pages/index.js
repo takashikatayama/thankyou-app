@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload, Gift, ChevronDown, ChevronUp, Pencil, Check, X, RotateCcw } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -71,6 +71,8 @@ export default function App() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
+  const [rankingType, setRankingType] = useState('commentOnly');
+  const [rankingMonth, setRankingMonth] = useState('all');
 
   useEffect(() => {
     fetchData();
@@ -221,6 +223,43 @@ export default function App() {
     employees.forEach(e => { points[e.id] = 0; givenDetails[e.id] = []; });
     filtered.forEach(t => { points[t.from]++; givenDetails[t.from].push({ to: t.to, date: t.date, message: t.message }); });
     return employees.map(e => ({ ...e, points: points[e.id], givenDetails: givenDetails[e.id].sort((a,b) => new Date(b.date) - new Date(a.date)) })).sort((a,b) => b.points - a.points);
+  };
+
+  const getRankingFilteredThanks = () => {
+    let filtered = thanks;
+    if (rankingMonth !== 'all') {
+      const [year, month] = rankingMonth.split('-').map(Number);
+      filtered = filtered.filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === year && d.getMonth() + 1 === month;
+      });
+    }
+    if (rankingType === 'commentOnly') {
+      filtered = filtered.filter(t => t.message && t.message.trim() !== '');
+    }
+    return filtered;
+  };
+
+  const getRankedReceived = () => {
+    const filtered = getRankingFilteredThanks();
+    const points = {}, receivedDetails = {};
+    employees.forEach(e => { points[e.id] = 0; receivedDetails[e.id] = []; });
+    filtered.forEach(t => { points[t.to]++; receivedDetails[t.to].push({ from: t.from, date: t.date, message: t.message }); });
+    return employees.map(e => ({ ...e, points: points[e.id], receivedDetails: receivedDetails[e.id].sort((a,b) => new Date(b.date) - new Date(a.date)) })).sort((a,b) => b.points - a.points);
+  };
+
+  const getRankedGiven = () => {
+    const filtered = getRankingFilteredThanks();
+    const points = {}, givenDetails = {};
+    employees.forEach(e => { points[e.id] = 0; givenDetails[e.id] = []; });
+    filtered.forEach(t => { points[t.from]++; givenDetails[t.from].push({ to: t.to, date: t.date, message: t.message }); });
+    return employees.map(e => ({ ...e, points: points[e.id], givenDetails: givenDetails[e.id].sort((a,b) => new Date(b.date) - new Date(a.date)) })).sort((a,b) => b.points - a.points);
+  };
+
+  const getAvailableMonths = () => {
+    const months = new Set();
+    thanks.forEach(t => months.add(t.date.substring(0, 7)));
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
   };
 
   const sendThanks = async () => {
@@ -796,7 +835,7 @@ export default function App() {
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
                     <YAxis allowDecimals={false} />
                     <Tooltip formatter={(value) => [value + ' ポイント', '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
-                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
+                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}<LabelList dataKey="points" position="top" style={{ fontSize: 11, fontWeight: 'bold', fill: '#374151' }} formatter={(v) => v > 0 ? v : ''} /></Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -814,7 +853,7 @@ export default function App() {
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
                     <YAxis allowDecimals={false} />
                     <Tooltip formatter={(value) => [value + ' ポイント', '提供数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
-                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyGivenChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
+                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyGivenChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}<LabelList dataKey="points" position="top" style={{ fontSize: 11, fontWeight: 'bold', fill: '#374151' }} formatter={(v) => v > 0 ? v : ''} /></Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -863,16 +902,36 @@ export default function App() {
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
                     <YAxis allowDecimals={false} />
                     <Tooltip formatter={(value) => [value + ' ポイント', (typeFilter === 'givenWithComment' || typeFilter === 'givenTotal') ? '提供数' : '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
-                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getPeriodChartData().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
+                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getPeriodChartData().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}<LabelList dataKey="points" position="top" style={{ fontSize: 11, fontWeight: 'bold', fill: '#374151' }} formatter={(v) => v > 0 ? v : ''} /></Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="bg-white rounded-xl shadow p-6 mb-6">
+              <div className="flex flex-wrap gap-3 mb-4 p-3 bg-gray-50 rounded-lg items-center">
+                <span className="text-sm font-medium text-gray-700">ランキング絞り込み:</span>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">種別:</label>
+                  <select className="p-2 border rounded text-sm" value={rankingType} onChange={(e) => setRankingType(e.target.value)}>
+                    <option value="commentOnly">コメント付き</option>
+                    <option value="total">総合</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">期間:</label>
+                  <select className="p-2 border rounded text-sm" value={rankingMonth} onChange={(e) => setRankingMonth(e.target.value)}>
+                    <option value="all">全期間</option>
+                    {getAvailableMonths().map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 mb-6">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-pink-500" />ポイント獲得ランキング</h3>
               <div className="space-y-3">
-                {ranked.map((e, i) => (
+                {getRankedReceived().map((e, i) => (
                   <div key={e.id} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-4">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>{i + 1}</div>
@@ -894,7 +953,7 @@ export default function App() {
             <div className="bg-white rounded-xl shadow p-6">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Heart className="w-5 h-5 text-orange-500" />ポイント提供ランキング</h3>
               <div className="space-y-3">
-                {givenRanked.map((e, i) => (
+                {getRankedGiven().map((e, i) => (
                   <div key={e.id} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-4">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>{i + 1}</div>
