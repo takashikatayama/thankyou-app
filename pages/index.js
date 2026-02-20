@@ -149,7 +149,10 @@ export default function App() {
 
   const handleLogout = () => {
     setCurrentUser(null); setIsAdmin(false); setView('login');
-    setLoginEmail(''); setLoginPassword('');
+    const savedRememberEmail = localStorage.getItem('thankyou_remember_email') === 'true';
+    const savedRememberPassword = localStorage.getItem('thankyou_remember_password') === 'true';
+    if (!savedRememberEmail) setLoginEmail('');
+    if (!savedRememberPassword) setLoginPassword('');
   };
 
   const handleResetPassword = async () => {
