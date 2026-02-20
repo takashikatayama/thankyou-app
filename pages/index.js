@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload, Gift, ChevronDown, ChevronUp, Pencil, Check, X, RotateCcw } from 'lucide-react';
+import { Users, BarChart3, Plus, Heart, LogOut, Calendar, TrendingUp, Trash2, Eye, EyeOff, Mail, Lock, UserPlus, ChevronLeft, ChevronRight, Download, Upload, Gift, ChevronDown, ChevronUp, Pencil, Check, X, RotateCcw, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
 const supabase = createClient(
@@ -260,6 +260,46 @@ export default function App() {
     const months = new Set();
     thanks.forEach(t => months.add(t.date.substring(0, 7)));
     return Array.from(months).sort((a, b) => b.localeCompare(a));
+  };
+
+  const getMvpList = (type) => {
+    // type: 'received' = 獲得MVP, 'given' = 提供MVP
+    const now = new Date();
+    const startMonth = new Date(2026, 1, 1); // 2026年2月から
+    const mvps = [];
+    let current = new Date(startMonth);
+    while (current <= now) {
+      const year = current.getFullYear();
+      const month = current.getMonth() + 1;
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+      // 当月のコメント付きサンキューを取得
+      const monthThanks = thanks.filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === year && d.getMonth() + 1 === month && t.message && t.message.trim() !== '';
+      });
+      // ポイント集計
+      const points = {};
+      employees.forEach(e => points[e.id] = 0);
+      monthThanks.forEach(t => points[type === 'received' ? t.to : t.from]++);
+      // 最大ポイントの社員を取得
+      let maxPoints = 0;
+      let mvpId = null;
+      Object.entries(points).forEach(([id, p]) => {
+        if (p > maxPoints) { maxPoints = p; mvpId = parseInt(id); }
+      });
+      // 月末を過ぎたら確定、当月は予定
+      const endOfMonth = new Date(year, month, 0); // 月末日
+      const isConfirmed = now > endOfMonth;
+      mvps.push({
+        month: monthKey,
+        label: formatMonth(monthKey),
+        mvpName: mvpId ? getName(mvpId) : '－',
+        points: maxPoints,
+        isConfirmed
+      });
+      current.setMonth(current.getMonth() + 1);
+    }
+    return mvps.reverse(); // 新しい月が上
   };
 
   const sendThanks = async () => {
@@ -824,6 +864,21 @@ export default function App() {
             </div>
 
             <div className="bg-white rounded-xl shadow p-6 mb-6">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Award className="w-5 h-5 text-yellow-500" />月間MVP（獲得ポイント）</h3>
+              <div className="max-h-36 overflow-y-auto space-y-2">
+                {getMvpList('received').map(m => (
+                  <div key={m.month} className={`flex items-center gap-3 p-3 rounded-lg ${m.isConfirmed ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50 border border-dashed border-gray-300'}`}>
+                    <Award className={`w-5 h-5 flex-shrink-0 ${m.isConfirmed ? 'text-yellow-500' : 'text-gray-400'}`} />
+                    <span className="text-sm font-medium text-gray-600 min-w-24">{m.label}</span>
+                    <span className={`text-sm font-bold flex-1 ${m.isConfirmed ? 'text-gray-800' : 'text-gray-500'}`}>{m.mvpName}</span>
+                    {m.points > 0 && <span className="text-xs text-pink-600 font-medium">{m.points}pt</span>}
+                    {!m.isConfirmed && <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">予定</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-orange-500" />月別ポイント獲得グラフ（コメント付のみ）</h3>
                 <div className="flex items-center gap-2"><button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft className="w-5 h-5" /></button><span className="font-medium min-w-32 text-center">{formatMonth(chartMonth)}</span><button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button></div>
@@ -838,6 +893,21 @@ export default function App() {
                     <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}<LabelList dataKey="points" position="top" style={{ fontSize: 11, fontWeight: 'bold', fill: '#374151' }} formatter={(v) => v > 0 ? v : ''} /></Bar>
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 mb-6">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Award className="w-5 h-5 text-yellow-500" />月間MVP（提供ポイント）</h3>
+              <div className="max-h-36 overflow-y-auto space-y-2">
+                {getMvpList('given').map(m => (
+                  <div key={m.month} className={`flex items-center gap-3 p-3 rounded-lg ${m.isConfirmed ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50 border border-dashed border-gray-300'}`}>
+                    <Award className={`w-5 h-5 flex-shrink-0 ${m.isConfirmed ? 'text-yellow-500' : 'text-gray-400'}`} />
+                    <span className="text-sm font-medium text-gray-600 min-w-24">{m.label}</span>
+                    <span className={`text-sm font-bold flex-1 ${m.isConfirmed ? 'text-gray-800' : 'text-gray-500'}`}>{m.mvpName}</span>
+                    {m.points > 0 && <span className="text-xs text-orange-600 font-medium">{m.points}pt</span>}
+                    {!m.isConfirmed && <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">予定</span>}
+                  </div>
+                ))}
               </div>
             </div>
 
