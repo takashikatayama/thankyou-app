@@ -61,7 +61,7 @@ export default function App() {
   const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(true);
   const [periodFilter, setPeriodFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('total');
+  const [typeFilter, setTypeFilter] = useState('receivedWithComment');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedMonth, setExpandedMonth] = useState(null);
@@ -308,10 +308,23 @@ export default function App() {
     return employees.map(e => ({ name: e.name.slice(0,4), fullName: e.name, points: points[e.id] })).sort((a,b) => b.points - a.points);
   };
 
-  const getPeriodChartData = () => {
-    const filtered = getPeriodFilteredThanks(typeFilter === 'withComment');
+  const getMonthlyGivenChartDataWithComment = () => {
+    const [year, month] = chartMonth.split('-').map(Number);
+    const monthThanks = thanks.filter(t => { 
+      const d = new Date(t.date); 
+      return d.getFullYear() === year && d.getMonth() + 1 === month && t.message && t.message.trim() !== '';
+    });
     const points = {}; employees.forEach(e => points[e.id] = 0);
-    filtered.forEach(t => points[t.to]++);
+    monthThanks.forEach(t => points[t.from]++);
+    return employees.map(e => ({ name: e.name.slice(0,4), fullName: e.name, points: points[e.id] })).sort((a,b) => b.points - a.points);
+  };
+
+  const getPeriodChartData = () => {
+    const isComment = typeFilter === 'receivedWithComment' || typeFilter === 'givenWithComment';
+    const isGiven = typeFilter === 'givenWithComment' || typeFilter === 'givenTotal';
+    const filtered = getPeriodFilteredThanks(isComment);
+    const points = {}; employees.forEach(e => points[e.id] = 0);
+    filtered.forEach(t => points[isGiven ? t.from : t.to]++);
     return employees.map(e => ({ name: e.name.slice(0,4), fullName: e.name, points: points[e.id] })).sort((a,b) => b.points - a.points);
   };
 
@@ -323,12 +336,52 @@ export default function App() {
 
   const formatMonth = (monthStr) => { const [year, month] = monthStr.split('-'); return `${year}年${parseInt(month)}月`; };
 
+  const formatDateSlash = (d) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+
+  const getPeriodDateRange = () => {
+    const now = new Date();
+    if (periodFilter === 'all') {
+      if (thanks.length === 0) return '';
+      const dates = thanks.map(t => t.date).sort();
+      const first = new Date(dates[0]);
+      return `${formatDateSlash(first)} - ${formatDateSlash(now)}`;
+    }
+    if (periodFilter === 'week') {
+      const weekAgo = new Date(now - 7*24*60*60*1000);
+      return `${formatDateSlash(weekAgo)} - ${formatDateSlash(now)}`;
+    }
+    if (periodFilter === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return `${formatDateSlash(firstDay)} - ${formatDateSlash(lastDay)}`;
+    }
+    if (periodFilter === 'year') {
+      const firstDay = new Date(now.getFullYear(), 0, 1);
+      const lastDay = new Date(now.getFullYear(), 11, 31);
+      return `${formatDateSlash(firstDay)} - ${formatDateSlash(lastDay)}`;
+    }
+    if (periodFilter === 'custom' && startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      return `${formatDateSlash(s)} - ${formatDateSlash(e)}`;
+    }
+    return '';
+  };
+
   const getPeriodLabel = () => {
     if (periodFilter === 'all') return '全期間';
     if (periodFilter === 'week') return '今週';
     if (periodFilter === 'month') return '今月';
     if (periodFilter === 'year') return '今年';
-    if (periodFilter === 'custom') return `${startDate} 〜 ${endDate}`;
+    if (periodFilter === 'custom') return '期間指定';
+    return '';
+  };
+
+  const getTypeLabel = () => {
+    if (typeFilter === 'receivedWithComment') return '【獲得】ポイント（コメント付き）';
+    if (typeFilter === 'givenWithComment') return '【提供】ポイント（コメント付き）';
+    if (typeFilter === 'receivedTotal') return '【獲得】ポイント（総合）';
+    if (typeFilter === 'givenTotal') return '【提供】ポイント（総合）';
     return '';
   };
 
@@ -733,24 +786,6 @@ export default function App() {
 
             <div className="bg-white rounded-xl shadow p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-pink-500" />月別ポイント獲得グラフ（総合）</h3>
-                <div className="flex items-center gap-2"><button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft className="w-5 h-5" /></button><span className="font-medium min-w-32 text-center">{formatMonth(chartMonth)}</span><button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button></div>
-              </div>
-              <div className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={getMonthlyChartData()} margin={{ top: 20, right: 30, left: 0, bottom: 60 }} barCategoryGap="15%">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip formatter={(value) => [value + ' ポイント', '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
-                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyChartData().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-orange-500" />月別ポイント獲得グラフ（コメント付のみ）</h3>
                 <div className="flex items-center gap-2"><button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft className="w-5 h-5" /></button><span className="font-medium min-w-32 text-center">{formatMonth(chartMonth)}</span><button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button></div>
               </div>
@@ -769,7 +804,28 @@ export default function App() {
 
             <div className="bg-white rounded-xl shadow p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5 text-green-500" />期間指定ポイント獲得グラフ</h3>
+                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Heart className="w-5 h-5 text-pink-500" />月別ポイント提供グラフ（コメント付のみ）</h3>
+                <div className="flex items-center gap-2"><button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft className="w-5 h-5" /></button><span className="font-medium min-w-32 text-center">{formatMonth(chartMonth)}</span><button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button></div>
+              </div>
+              <div className="h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={getMonthlyGivenChartDataWithComment()} margin={{ top: 20, right: 30, left: 0, bottom: 60 }} barCategoryGap="15%">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={(value) => [value + ' ポイント', '提供数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
+                    <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getMonthlyGivenChartDataWithComment().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5 text-green-500" />期間指定ポイント獲得・提供グラフ</h3>
+                {getPeriodDateRange() && (
+                  <span className="text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-lg">{getPeriodDateRange()}</span>
+                )}
               </div>
               <div className="flex flex-wrap gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -792,19 +848,21 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-gray-600">種別:</label>
                   <select className="p-2 border rounded text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                    <option value="total">総合ポイント</option>
-                    <option value="withComment">コメント付きポイント</option>
+                    <option value="receivedWithComment">【獲得】ポイント（コメント付き）</option>
+                    <option value="givenWithComment">【提供】ポイント（コメント付き）</option>
+                    <option value="receivedTotal">【獲得】ポイント（総合）</option>
+                    <option value="givenTotal">【提供】ポイント（総合）</option>
                   </select>
                 </div>
               </div>
-              <div className="text-sm text-gray-500 mb-2">表示期間: {getPeriodLabel()} / 種別: {typeFilter === 'total' ? '総合ポイント' : 'コメント付きポイント'}</div>
+              <div className="text-sm text-gray-500 mb-2">表示期間: {getPeriodLabel()} / 種別: {getTypeLabel()}</div>
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={getPeriodChartData()} margin={{ top: 20, right: 30, left: 0, bottom: 60 }} barCategoryGap="15%">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
                     <YAxis allowDecimals={false} />
-                    <Tooltip formatter={(value) => [value + ' ポイント', '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
+                    <Tooltip formatter={(value) => [value + ' ポイント', (typeFilter === 'givenWithComment' || typeFilter === 'givenTotal') ? '提供数' : '獲得数']} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label} />
                     <Bar dataKey="points" radius={[4,4,0,0]} maxBarSize={40}>{getPeriodChartData().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Bar>
                   </BarChart>
                 </ResponsiveContainer>
