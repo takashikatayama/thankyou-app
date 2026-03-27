@@ -290,9 +290,10 @@ export default function App() {
       Object.entries(points).forEach(([id, p]) => {
         if (p > maxPoints) { maxPoints = p; mvpId = parseInt(id); }
       });
-      // 月末を過ぎたら確定、当月は予定
-      const endOfMonth = new Date(year, month, 0); // 月末日
-      const isConfirmed = now > endOfMonth;
+      // 最終金曜18時を過ぎたら確定、それ以前は予定
+      const lastFri = getLastFriday(year, month);
+      const confirmTime = new Date(lastFri.getFullYear(), lastFri.getMonth(), lastFri.getDate(), 18, 0, 0);
+      const isConfirmed = now >= confirmTime;
       mvps.push({
         month: monthKey,
         label: formatMonth(monthKey),
@@ -307,6 +308,10 @@ export default function App() {
 
   const sendThanks = async () => {
     if (!selectedEmployee) return;
+    if (isSendingFrozen()) {
+      alert('今月は締め切りました。翌月1日からまた送れるようになります。');
+      return;
+    }
     const { data, error } = await supabase.from('thanks').insert({
       from_employee_id: currentUser.id, to_employee_id: selectedEmployee, message: thankMessage.trim() || ''
     }).select().single();
@@ -536,6 +541,16 @@ export default function App() {
     return date;
   };
 
+  const isSendingFrozen = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 1-12
+    const lastFriday = getLastFriday(year, month);
+    const freezeStart = new Date(lastFriday.getFullYear(), lastFriday.getMonth(), lastFriday.getDate(), 18, 0, 0);
+    const nextMonthStart = new Date(year, month, 1, 0, 0, 0); // 翌月1日 0:00
+    return now >= freezeStart && now < nextMonthStart;
+  };
+
   const canViewReceivedThanks = (monthStr) => {
     const [year, month] = monthStr.split('-').map(Number);
     const lastFriday = getLastFriday(year, month);
@@ -704,21 +719,31 @@ export default function App() {
               <div><h2 className="text-xl font-bold text-gray-800">{currentUser.name}さん</h2><p className="text-gray-500 text-sm">{currentUser.email}</p></div>
               <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-gray-600"><LogOut className="w-5 h-5" /></button>
             </div>
-            <div className="bg-gradient-to-r from-pink-500 to-orange-500 rounded-xl p-6 text-white text-center mb-6"><Heart className="w-12 h-12 mx-auto mb-2" /><p className="text-lg">サンキューを送ろう！</p></div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">感謝を伝えたい相手</label>
-                <select className="w-full p-3 border rounded-lg" value={selectedEmployee || ''} onChange={(e) => setSelectedEmployee(parseInt(e.target.value))}>
-                  <option value="" disabled>社員を選択...</option>
-                  {employees.filter(e => e.id !== currentUser.id).map(e => <option key={e.id} value={e.id}>{e.name}{e.department ? `（${e.department}）` : ''}</option>)}
-                </select>
+            {isSendingFrozen() ? (
+              <div className="bg-gray-100 rounded-xl p-6 text-center">
+                <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                <p className="text-gray-600 font-bold mb-2">今月のサンキュー送信は締め切りました</p>
+                <p className="text-gray-400 text-sm">翌月1日からまた送れるようになります</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">メッセージ（任意）</label>
-                <textarea className="w-full p-3 border rounded-lg" rows={3} placeholder="感謝のメッセージを入力..." value={thankMessage} onChange={(e) => setThankMessage(e.target.value)} />
-              </div>
-              <button onClick={sendThanks} disabled={!selectedEmployee} className="w-full p-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-lg disabled:opacity-50"><Heart className="w-5 h-5 inline mr-2" />サンキューを送る</button>
-            </div>
+            ) : (
+              <>
+                <div className="bg-gradient-to-r from-pink-500 to-orange-500 rounded-xl p-6 text-white text-center mb-6"><Heart className="w-12 h-12 mx-auto mb-2" /><p className="text-lg">サンキューを送ろう！</p></div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">感謝を伝えたい相手</label>
+                    <select className="w-full p-3 border rounded-lg" value={selectedEmployee || ''} onChange={(e) => setSelectedEmployee(parseInt(e.target.value))}>
+                      <option value="" disabled>社員を選択...</option>
+                      {employees.filter(e => e.id !== currentUser.id).map(e => <option key={e.id} value={e.id}>{e.name}{e.department ? `（${e.department}）` : ''}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">メッセージ（任意）</label>
+                    <textarea className="w-full p-3 border rounded-lg" rows={3} placeholder="感謝のメッセージを入力..." value={thankMessage} onChange={(e) => setThankMessage(e.target.value)} />
+                  </div>
+                  <button onClick={sendThanks} disabled={!selectedEmployee} className="w-full p-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-lg disabled:opacity-50"><Heart className="w-5 h-5 inline mr-2" />サンキューを送る</button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-4">
