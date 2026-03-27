@@ -526,11 +526,11 @@ export default function App() {
     return day === 0 || day === 6; // 日曜=0, 土曜=6
   };
 
-  const getLastBusinessDay = (year, month) => {
+  const getLastFriday = (year, month) => {
     // 月末日を取得
     let date = new Date(year, month, 0); // month は1-12なので、0を渡すと前月の末日
-    // 土日祝日なら前の営業日に戻る
-    while (isWeekend(date) || isHoliday(date)) {
+    // 金曜日(dayOfWeek=5)になるまで戻る
+    while (date.getDay() !== 5) {
       date.setDate(date.getDate() - 1);
     }
     return date;
@@ -538,8 +538,8 @@ export default function App() {
 
   const canViewReceivedThanks = (monthStr) => {
     const [year, month] = monthStr.split('-').map(Number);
-    const lastBusinessDay = getLastBusinessDay(year, month);
-    const viewableTime = new Date(lastBusinessDay.getFullYear(), lastBusinessDay.getMonth(), lastBusinessDay.getDate(), 18, 0, 0);
+    const lastFriday = getLastFriday(year, month);
+    const viewableTime = new Date(lastFriday.getFullYear(), lastFriday.getMonth(), lastFriday.getDate(), 18, 0, 0);
     return new Date() >= viewableTime;
   };
 
@@ -763,7 +763,7 @@ export default function App() {
                 ))}
               </div>
             )}
-            <p className="text-xs text-gray-400 mt-4 text-center">※ 毎月末日18時以降に当月分が表示されます</p>
+            <p className="text-xs text-gray-400 mt-4 text-center">※ 毎月最終金曜日18時以降に当月分が表示されます</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-6">
